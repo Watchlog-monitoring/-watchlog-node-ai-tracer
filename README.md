@@ -1,102 +1,128 @@
-# 🧠 Watchlog AI Tracer (Node.js)
+# @watchlog/ai-tracer
 
-`watchlog-ai-tracer` is a lightweight SDK for tracing AI interactions (like GPT-4 requests) by sending spans to the Watchlog Agent installed on your local server.
+A lightweight Node.js tracer for AI workloads, designed to capture and forward span data for monitoring and observability with Watchlog.
 
-## 🚀 Installation
+## Features
+
+- **Automatic trace & span management** with unique IDs  
+- **Disk-backed queue** with TTL to prevent data loss  
+- **Batch HTTP delivery** with retry and exponential backoff  
+- **Kubernetes-aware endpoint detection**  
+- **Sensitive field sanitization** and output truncation  
+
+## Installation
 
 ```bash
-npm install ./watchlog-ai-tracer
+npm install @watchlog/ai-tracer
 ```
 
-Or use it directly in your project:
+or
 
-```js
-const WatchlogTracer = require('./watchlog-ai-tracer');
+```bash
+yarn add @watchlog/ai-tracer
 ```
 
-## ⚙️ How It Works
-
-### 1. Start a trace and spans
+## Usage
 
 ```js
-const tracer = new WatchlogTracer();
+// index.js
+const WatchlogTracer = require('@watchlog/ai-tracer');
 
-tracer.startTrace();
-
-const rootSpan = tracer.startSpan('handle-request', {
-  feature: 'chat',
-  promptVersion: 'v1'
+const tracer = new WatchlogTracer({
+  app: 'your-app-name',                // 🆔 Application name (required)
+  endpoint: 'http://localhost:3774',   // 🔗 Agent endpoint (optional)
+  batchSize: 50,                       // 🔄 Spans per batch
+  autoFlushInterval: 1000,             // ⏲ Flush queue every 1s
+  maxQueueSize: 10000,                 // 📥 Max queued spans
+  queueItemTTL: 10 * 60 * 1000,        // ⌛ Span TTL in ms (default: 10m)
+  /* ... other config options (see below) ... */
 });
 
-const llmSpan = tracer.childSpan(rootSpan, 'call-llm');
-
-// ... make LLM call
-
-tracer.endSpan(llmSpan, {
-  tokens: 67,
-  cost: 0.0021,
-  model: 'gpt-4',
-  provider: 'openai',
-  input: 'Summarize this...',
-  output: 'Here is the summary...'
-});
-
-await tracer.send();
-```
-
-### 2. Reliable delivery with fallback queue
-
-- If the local Watchlog Agent (`http://localhost:3774/ai-tracer`) is unavailable, spans will be stored silently in a local file.
-- Queue file path is OS-independent (e.g. `/tmp/watchlog-queue.jsonl` on Unix-based systems).
-
-### 3. Metadata Support
-
-```js
-{
-  feature: 'chat-api',
-  step: 'generate',
-  promptVersion: 'v3',
-  userId: 'u-123',
-  label: 'production-test'
+// Simulated async sleep
+function sleep(sec) {
+  return new Promise(resolve => setTimeout(resolve, sec * 1000));
 }
-```
 
----
+async function main() {
+  // Start a new trace (optional)
+  tracer.startTrace();
 
-## 📦 Span Format
+  // Root span
+  const root = tracer.startSpan('handle-request', { feature: 'ai-summary' });
+  await sleep(1);
 
-```json
-{
-  "traceId": "trace-xxx",
-  "spanId": "span-yyy",
-  "parentId": null,
-  "name": "call-llm",
-  "startTime": "...",
-  "endTime": "...",
-  "duration": 1234,
-  "tokens": 64,
-  "cost": 0.0018,
-  "model": "gpt-4",
-  "provider": "openai",
-  "input": "...",
-  "output": "...",
-  "metadata": {
-    "feature": "summary",
-    "promptVersion": "v2"
-  }
+  // Child span
+  const llm = tracer.childSpan(root, 'call-llm');
+  await sleep(0.5);
+  tracer.endSpan(llm, {
+    tokens:   42,
+    cost:     0.0012,
+    model:    'gpt-4',
+    provider: 'openai',
+    input:    'Summarize: Hello world...',
+    output:   'Hello world summary.'
+  });
+
+  // End root span
+  tracer.endSpan(root);
+
+  // Ensure spans are flushed to disk and send
+  await sleep(1);
+  tracer.send();
 }
+
+main();
 ```
 
----
+## API
 
-## 🔁 Local Queue Management
+### `new WatchlogTracer(config)`
 
-- The file `/tmp/watchlog-queue.jsonl` is flushed every time `send()` is called.
-- Successfully sent spans are removed.
-- Failed spans remain and will retry on the next `.send()` call.
+- **`config.app`** _(_string_, **required**)_ — Your application name.
+- **`config.endpoint`** _(_string_)_ — URL of the Watchlog agent (default: auto-detected per environment).
+- **`config.batchSize`** _(_number_)_ — Number of spans per HTTP batch (default: `50`).
+- **`config.autoFlushInterval`** _(_number_)_ — Milliseconds between automatic queue flushes (default: `1000`).
+- **`config.maxQueueSize`** _(_number_)_ — Maximum spans stored on disk before rotation (default: `10000`).
+- **`config.queueItemTTL`** _(_number_)_ — Time‑to‑live for queued spans in ms (default: `600000`).
+- **`config.maxRetries`** _(_number_)_ — HTTP retry attempts (default: `3`).
+- **`config.requestTimeout`** _(_number_)_ — Axios request timeout in ms (default: `5000`).
+- **`config.sensitiveFields`** _(_string[]_)_ — Field keys to strip from trace data.
 
----
+### Tracing Methods
 
-## 📄 License
+- **`startTrace()`** → _`traceId`_  
+  Begins a new trace. Returns the generated `traceId`.
 
-MIT — Built for Watchlog by [Mohammadreza](https://github.com/mohammadnajm)
+- **`startSpan(name, metadata)`** → _`spanId`_  
+  Creates a span under the current `traceId`.
+
+- **`childSpan(parentSpanId, name, metadata)`** → _`spanId`_  
+  Alias for `startSpan` with a `parentId`.
+
+- **`endSpan(spanId, data)`**  
+  Marks a span as complete, recording timestamps, duration, tokens, cost, etc.
+
+- **`send()`**  
+  Enqueues all pending spans to disk immediately.
+
+## Kubernetes Endpoint Detection
+
+When running inside Kubernetes, the tracer auto-detects via ServiceAccount tokens, cgroup info, or DNS lookup and switches `endpoint`:
+- **K8s:** `http://watchlog-node-agent.monitoring.svc.cluster.local:3774`
+- **Local:** `http://127.0.0.1:3774`
+
+## Running Tests
+
+Use the provided `test.js` script under root:
+
+```bash
+node test.js
+```
+
+## Contributing
+
+PRs and issues welcome — please read our [contributing guidelines](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/blob/main/CONTRIBUTING.md).
+
+## License
+
+MIT © Watchlog Monitoring
