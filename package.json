@@ -1,6 +1,6 @@
 {
   "name": "@watchlog/ai-tracer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "`watchlog-ai-tracer` is a lightweight SDK for tracing AI interactions (like GPT-4 requests) by sending spans to the Watchlog Agent installed on your local server.",
   "license": "ISC",
   "author": "",
