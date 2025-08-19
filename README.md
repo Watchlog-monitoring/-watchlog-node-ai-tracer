@@ -25,53 +25,104 @@ yarn add @watchlog/ai-tracer
 ## Usage
 
 ```js
-// index.js
+// README example — OpenAI call + tracing (non-blocking, no sleep)
 const WatchlogTracer = require('@watchlog/ai-tracer');
 
+// 1) Init tracer (exit hooks خودکار: beforeExit / SIGINT / SIGTERM)
 const tracer = new WatchlogTracer({
-  app: 'your-app-name',                // 🆔 Application name (required)
-  endpoint: 'http://localhost:3774',   // 🔗 Agent endpoint (optional)
-  batchSize: 50,                       // 🔄 Spans per batch
-  autoFlushInterval: 1000,             // ⏲ Flush queue every 1s
-  maxQueueSize: 10000,                 // 📥 Max queued spans
-  queueItemTTL: 10 * 60 * 1000,        // ⌛ Span TTL in ms (default: 10m)
-  /* ... other config options (see below) ... */
+  app: 'your-app-name',                 // 🆔 required
+  batchSize: 200,                       // 🔄 spans per HTTP batch
+  flushOnSpanCount: 200,                // 🧺 enqueue to disk after N spans
+  autoFlushInterval: 1500,              // ⏲ background flush interval (ms)
+  maxQueueSize: 100000,                 // 📥 max queued spans on disk
+  queueItemTTL: 10 * 60 * 1000,         // ⌛ TTL for queued spans (ms)
+  // autoInstallExitHooks: true,        // ✅ default (flushes on exit)
 });
 
-// Simulated async sleep
-function sleep(sec) {
-  return new Promise(resolve => setTimeout(resolve, sec * 1000));
+// 2) Helper: Wrap any async work in a span
+async function traceAsync(name, metadata, fn) {
+  const spanId = tracer.startSpan(name, metadata);
+  try {
+    const result = await fn();
+    tracer.endSpan(spanId, { output: 'ok' });
+    return result;
+  } catch (e) {
+    tracer.endSpan(spanId, { output: String(e?.message || e) });
+    throw e;
+  } finally {
+    tracer.send(); // non-blocking: write to disk + background flush
+  }
 }
 
-async function main() {
-  // Start a new trace (optional)
-  tracer.startTrace();
+// 3) Call OpenAI and capture input/output/tokens in trace
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-  // Root span
-  const root = tracer.startSpan('handle-request', { feature: 'ai-summary' });
-  await sleep(1);
-
-  // Child span
-  const llm = tracer.childSpan(root, 'call-llm');
-  await sleep(0.5);
-  tracer.endSpan(llm, {
-    tokens:   42,
-    cost:     0.0012,
-    model:    'gpt-4',
+async function callOpenAI(prompt, { parentId } = {}) {
+  const llmSpan = tracer.childSpan(parentId, 'openai.chat.completions', {
     provider: 'openai',
-    input:    'Summarize: Hello world...',
-    output:   'Hello world summary.'
+    model: 'gpt-4o',
   });
 
-  // End root span
-  tracer.endSpan(root);
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
 
-  // Ensure spans are flushed to disk and send
-  await sleep(1);
-  tracer.send();
+    const json = await res.json();
+    const output = json?.choices?.[0]?.message?.content ?? '';
+    const tokens = json?.usage?.total_tokens ?? 0;
+
+    tracer.endSpan(llmSpan, {
+      input: prompt,
+      output,
+      tokens,
+      model: 'gpt-4o',
+      provider: 'openai',
+      cost: 0, // Optional : if you have cost
+    });
+
+    return output;
+  } catch (e) {
+    tracer.endSpan(llmSpan, { input: prompt, output: String(e?.message || e) });
+    throw e;
+  } finally {
+    tracer.send(); // non-blocking
+  }
 }
 
-main();
+// 4) Example flow (root span + child span for LLM)
+async function main() {
+  tracer.startTrace(); // optional but recommended (groups spans)
+
+  const root = tracer.startSpan('handle-request', { feature: 'ai-summary' });
+
+  // Validate input (fast op, no sleep)
+  await traceAsync('validate-input', { parentId: root }, async () => {
+    // ... your validation logic
+  });
+
+  // Call LLM and capture trace
+  const summary = await callOpenAI('Summarize: Hello world...', { parentId: root });
+
+  // Close root
+  tracer.endSpan(root, { output: 'done' });
+  tracer.send(); // non-blocking
+
+  console.log('LLM summary:', summary);
+}
+
+main().catch(err => {
+  console.error('App error:', err);
+});
+
 ```
 
 ## API
