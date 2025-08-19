@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/compare/1.0.1...1.0.2) (2025-08-19)
+
+
+### Bug Fixes
+
+* flush traces ([1c3be9c](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/commit/1c3be9c71e2ca73998ccf41337aa49eda2708a91))
+
 ## [1.0.1](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/compare/1.0.0...1.0.1) (2025-08-05)
 
 
