@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/compare/1.0.3...1.1.0) (2025-12-01)
+
+
+### Features
+
+* handle agent url ([91834a4](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/commit/91834a45cf29a3c4d4be61ff0b250f6b31a8e444))
+
 ## [1.0.3](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/compare/1.0.2...1.0.3) (2025-08-19)
 
 
