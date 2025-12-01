@@ -130,7 +130,7 @@ main().catch(err => {
 ### `new WatchlogTracer(config)`
 
 - **`config.app`** _(_string_, **required**)_ — Your application name.
-- **`config.endpoint`** _(_string_)_ — URL of the Watchlog agent (default: auto-detected per environment).
+- **`config.agentURL`** _(_string_)_ — URL of the Watchlog agent (default: auto-detected per environment or from `WATCHLOG_AGENT_URL` env var).
 - **`config.batchSize`** _(_number_)_ — Number of spans per HTTP batch (default: `50`).
 - **`config.autoFlushInterval`** _(_number_)_ — Milliseconds between automatic queue flushes (default: `1000`).
 - **`config.maxQueueSize`** _(_number_)_ — Maximum spans stored on disk before rotation (default: `10000`).
@@ -156,11 +156,38 @@ main().catch(err => {
 - **`send()`**  
   Enqueues all pending spans to disk immediately.
 
-## Kubernetes Endpoint Detection
+## Agent URL Configuration
 
-When running inside Kubernetes, the tracer auto-detects via ServiceAccount tokens, cgroup info, or DNS lookup and switches `endpoint`:
-- **K8s:** `http://watchlog-node-agent.monitoring.svc.cluster.local:3774`
-- **Local:** `http://127.0.0.1:3774`
+The agent URL is determined in the following priority order:
+
+1. **Explicit config parameter**: `agentURL` in `WatchlogTracer` initialization
+2. **Environment variable**: `WATCHLOG_AGENT_URL`
+3. **Auto-detection**:
+   - **Kubernetes**: if running in K8s (ServiceAccount tokens, cgroup info, or DNS lookup), auto-switches to `http://watchlog-node-agent.monitoring.svc.cluster.local:3774`
+   - **Local**: defaults to `http://127.0.0.1:3774`
+
+### Examples
+
+```js
+// Option 1: Pass agentURL directly
+const tracer = new WatchlogTracer({
+  app: 'myapp',
+  agentURL: 'http://my-custom-agent:3774'
+});
+
+// Option 2: Use environment variable
+// export WATCHLOG_AGENT_URL=http://my-custom-agent:3774
+// or
+// process.env.WATCHLOG_AGENT_URL = 'http://my-custom-agent:3774';
+const tracer = new WatchlogTracer({
+  app: 'myapp'
+});
+
+// Option 3: Auto-detection (default behavior)
+const tracer = new WatchlogTracer({
+  app: 'myapp'
+});
+```
 
 ## Running Tests
 

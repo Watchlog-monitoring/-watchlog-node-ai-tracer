@@ -28,8 +28,24 @@ async function isRunningInK8s() {
 
 let _cachedURL = null;
 async function getAgentURL(override) {
-  if (override) return override;
-  if (_cachedURL) return _cachedURL;
+  // Priority 1: explicit override (from config parameter)
+  if (override) {
+    return override.replace(/\/+$/, ""); // remove trailing slashes
+  }
+  
+  // Priority 2: environment variable
+  const envURL = process.env.WATCHLOG_AGENT_URL;
+  if (envURL) {
+    _cachedURL = envURL.replace(/\/+$/, "");
+    return _cachedURL;
+  }
+  
+  // Priority 3: cached value
+  if (_cachedURL) {
+    return _cachedURL;
+  }
+  
+  // Priority 4: auto-detect based on environment
   _cachedURL = (await isRunningInK8s())
     ? "http://watchlog-node-agent.monitoring.svc.cluster.local:3774"
     : "http://127.0.0.1:3774";
