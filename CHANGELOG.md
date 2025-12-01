@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/compare/1.1.0...1.1.1) (2025-12-01)
+
+
+### Bug Fixes
+
+* version in package.json ([a70e21b](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/commit/a70e21bd1e50ea971d5c17045910c9cf45eb0633))
+
 # [1.1.0](https://github.com/Watchlog-monitoring/-watchlog-node-ai-tracer/compare/1.0.3...1.1.0) (2025-12-01)
 
 
